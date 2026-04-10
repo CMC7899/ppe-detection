@@ -4,14 +4,7 @@ import { FilesetResolver, ObjectDetector } from "@mediapipe/tasks-vision";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { addLog, getLatestLogs, getSettings, ppeLabel, saveSettings } from "@/lib/db";
-import {
-  buildChecklist,
-  evaluateStatus,
-  formatDateTime,
-  isPersonInRoi,
-  mapLabelToItem,
-  normalizeRoi,
-} from "@/lib/ppe";
+import { buildChecklist, evaluateStatus, formatDateTime, isPersonInRoi, mapLabelToItem, normalizeRoi } from "@/lib/ppe";
 import { AppSettings, ChecklistState, DetectionBox, PPELog } from "@/lib/types";
 
 type CameraState = "connecting" | "ready" | "denied" | "not_found" | "error";
@@ -107,9 +100,7 @@ export default function DashboardPage() {
     let active = true;
     void (async () => {
       try {
-        const vision = await FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm",
-        );
+        const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
         const detector = await ObjectDetector.createFromOptions(vision, {
           baseOptions: { modelAssetPath: "/models/gear_guard_net-tflite-float/gear_guard_net.tflite" },
           scoreThreshold: 0.4,
@@ -146,31 +137,28 @@ export default function DashboardPage() {
     if (cams.length === 0) setCameraState("not_found");
   }, []);
 
-  const startCamera = useCallback(
-    async (wantedDeviceId?: string) => {
-      try {
-        setCameraState("connecting");
-        stopStream();
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video:
-            wantedDeviceId && wantedDeviceId !== "default"
-              ? { deviceId: { exact: wantedDeviceId }, width: { ideal: 960 }, height: { ideal: 540 } }
-              : { facingMode: "user", width: { ideal: 960 }, height: { ideal: 540 } },
-        });
-        streamRef.current = stream;
-        if (!videoRef.current) return;
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        await queryDevices();
-        setCameraState("ready");
-      } catch (error) {
-        const name = (error as DOMException)?.name;
-        setCameraState(name === "NotAllowedError" ? "denied" : name === "NotFoundError" ? "not_found" : "error");
-      }
-    },
-    [queryDevices, stopStream],
-  );
+  const startCamera = useCallback(async (wantedDeviceId?: string) => {
+    try {
+      setCameraState("connecting");
+      stopStream();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video:
+          wantedDeviceId && wantedDeviceId !== "default"
+            ? { deviceId: { exact: wantedDeviceId }, width: { ideal: 960 }, height: { ideal: 540 } }
+            : { facingMode: "user", width: { ideal: 960 }, height: { ideal: 540 } },
+      });
+      streamRef.current = stream;
+      if (!videoRef.current) return;
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play();
+      await queryDevices();
+      setCameraState("ready");
+    } catch (error) {
+      const name = (error as DOMException)?.name;
+      setCameraState(name === "NotAllowedError" ? "denied" : name === "NotFoundError" ? "not_found" : "error");
+    }
+  }, [queryDevices, stopStream]);
 
   useEffect(() => {
     void startCamera(deviceId);
@@ -192,49 +180,43 @@ export default function DashboardPage() {
     return canvas.toDataURL("image/jpeg", 0.8);
   }, []);
 
-  const persistRoi = useCallback(
-    async (nextRoi: AppSettings["roiRect"]) => {
-      if (!settings) return;
-      const next = { ...settings, roiRect: normalizeRoi(nextRoi) };
-      setSettings(next);
-      setRoiDraft(next.roiRect);
-      await saveSettings(next);
-    },
-    [settings],
-  );
+  const persistRoi = useCallback(async (nextRoi: AppSettings["roiRect"]) => {
+    if (!settings) return;
+    const next = { ...settings, roiRect: normalizeRoi(nextRoi) };
+    setSettings(next);
+    setRoiDraft(next.roiRect);
+    await saveSettings(next);
+  }, [settings]);
 
-  const applyChecklist = useCallback(
-    async (nextChecklist: ChecklistState, personInRoi: boolean) => {
-      if (!settings) return;
-      const now = Date.now();
-      const status = evaluateStatus(nextChecklist, settings);
+  const applyChecklist = useCallback(async (nextChecklist: ChecklistState, personInRoi: boolean) => {
+    if (!settings) return;
+    const now = Date.now();
+    const status = evaluateStatus(nextChecklist, settings);
 
-      if (personInRoi) {
-        if (!roiEnteredAtRef.current) roiEnteredAtRef.current = now;
-      } else {
-        roiEnteredAtRef.current = null;
-      }
+    if (personInRoi) {
+      if (!roiEnteredAtRef.current) roiEnteredAtRef.current = now;
+    } else {
+      roiEnteredAtRef.current = null;
+    }
 
-      const hold = roiEnteredAtRef.current ? now - roiEnteredAtRef.current : 0;
-      const gateReached = hold >= ROI_HOLD_MS;
+    const hold = roiEnteredAtRef.current ? now - roiEnteredAtRef.current : 0;
+    const gateReached = hold >= ROI_HOLD_MS;
 
-      setChecklist(nextChecklist);
-      setInRoiForMs(hold);
-      setIsAllowed(gateReached && status.isAllowed);
+    setChecklist(nextChecklist);
+    setInRoiForMs(hold);
+    setIsAllowed(gateReached && status.isAllowed);
 
-      if (gateReached && now - lastLoggedAtRef.current >= LOG_COOLDOWN_MS) {
-        lastLoggedAtRef.current = now;
-        await addLog({
-          timestamp: now,
-          snapshotBase64: captureSnapshot(),
-          detectedItems: status.detectedItems,
-          missingItems: status.missingItems,
-          status: status.isAllowed ? "ALLOWED" : "DENIED",
-        });
-      }
-    },
-    [captureSnapshot, settings],
-  );
+    if (gateReached && now - lastLoggedAtRef.current >= LOG_COOLDOWN_MS) {
+      lastLoggedAtRef.current = now;
+      await addLog({
+        timestamp: now,
+        snapshotBase64: captureSnapshot(),
+        detectedItems: status.detectedItems,
+        missingItems: status.missingItems,
+        status: status.isAllowed ? "ALLOWED" : "DENIED",
+      });
+    }
+  }, [captureSnapshot, settings]);
 
   useEffect(() => {
     const tick = () => {
@@ -364,23 +346,18 @@ export default function DashboardPage() {
     setRoiDraft({ x: p.x, y: p.y, width: 0.02, height: 0.02 });
   }, []);
 
-  const onMove = useCallback(
-    (event: React.PointerEvent<HTMLCanvasElement>) => {
-      if (!dragging || !roiStartRef.current) return;
-      const p = getNormPoint(event);
-      if (!p) return;
-      const s = roiStartRef.current;
-      setRoiDraft(
-        normalizeRoi({
-          x: Math.min(s.x, p.x),
-          y: Math.min(s.y, p.y),
-          width: Math.max(Math.abs(p.x - s.x), 0.02),
-          height: Math.max(Math.abs(p.y - s.y), 0.02),
-        }),
-      );
-    },
-    [dragging],
-  );
+  const onMove = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!dragging || !roiStartRef.current) return;
+    const p = getNormPoint(event);
+    if (!p) return;
+    const s = roiStartRef.current;
+    setRoiDraft(normalizeRoi({
+      x: Math.min(s.x, p.x),
+      y: Math.min(s.y, p.y),
+      width: Math.max(Math.abs(p.x - s.x), 0.02),
+      height: Math.max(Math.abs(p.y - s.y), 0.02),
+    }));
+  }, [dragging]);
 
   const onUp = useCallback(async () => {
     setDragging(false);
@@ -389,11 +366,11 @@ export default function DashboardPage() {
   }, [persistRoi, roiDraft]);
 
   const cameraMessage = useMemo(() => {
-    if (cameraState === "connecting") return "Đang kết nối camera";
-    if (cameraState === "ready") return "Camera đã sẵn sàng";
-    if (cameraState === "denied") return "Không có quyền camera";
-    if (cameraState === "not_found") return "Không tìm thấy camera";
-    return "Lỗi camera";
+    if (cameraState === "connecting") return "Connecting camera";
+    if (cameraState === "ready") return "Camera ready";
+    if (cameraState === "denied") return "Camera permission denied";
+    if (cameraState === "not_found") return "No camera found";
+    return "Camera error";
   }, [cameraState]);
 
   return (
@@ -401,97 +378,57 @@ export default function DashboardPage() {
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex flex-wrap items-center gap-3">
-            <h2 className="text-base font-semibold text-slate-800">Camera giám sát</h2>
-            <span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700">
-              {cameraMessage}
-            </span>
-            <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
-              Engine: {engine === "tflite" ? "TFLite local" : "Google AI API"}
-            </span>
+            <h2 className="text-base font-semibold text-slate-800">Monitoring Camera</h2>
+            <span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700">{cameraMessage}</span>
+            <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">Engine: {engine === "tflite" ? "TFLite local" : "Google AI API"}</span>
           </div>
 
           <div className="mb-3 flex items-center gap-2">
             <label htmlFor="cameraSelect" className="text-sm text-slate-600">Camera</label>
-            <select
-              id="cameraSelect"
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm"
-              value={deviceId}
-              onChange={(e) => setDeviceId(e.target.value)}
-            >
-              <option value="default">Mặc định</option>
+            <select id="cameraSelect" className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm" value={deviceId} onChange={(e) => setDeviceId(e.target.value)}>
+              <option value="default">Default</option>
               {devices.map((d) => (
-                <option key={d.deviceId} value={d.deviceId}>
-                  {d.label || `Camera ${d.deviceId.slice(0, 6)}`}
-                </option>
+                <option key={d.deviceId} value={d.deviceId}>{d.label || `Camera ${d.deviceId.slice(0, 6)}`}</option>
               ))}
             </select>
           </div>
 
           <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
             <video ref={videoRef} className="h-auto w-full" muted playsInline />
-            <canvas
-              ref={overlayRef}
-              className="absolute inset-0 h-full w-full cursor-crosshair"
-              onPointerDown={onDown}
-              onPointerMove={onMove}
-              onPointerUp={onUp}
-            />
+            <canvas ref={overlayRef} className="absolute inset-0 h-full w-full cursor-crosshair" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} />
           </div>
-
-          <p className="mt-2 text-xs text-slate-500">
-            Vẽ ROI trên video. Chỉ kiểm tra khi person nằm trong ROI hơn 2 giây.
-          </p>
-
+          <p className="mt-2 text-xs text-slate-500">Draw ROI on the video. PPE checks trigger only when a person stays in ROI for more than 2 seconds.</p>
           {detectorState === "unavailable" && (
-            <p className="mt-1 text-xs text-amber-700">
-              Local TFLite đang tắt tạm thời. Dùng Google AI API. {detectorError ? `Lỗi: ${detectorError}` : ""}
-            </p>
+            <p className="mt-1 text-xs text-amber-700">Local TFLite is temporarily disabled. Using Google AI API. {detectorError ? `Error: ${detectorError}` : ""}</p>
           )}
-
           <canvas ref={snapshotRef} className="hidden" />
         </section>
 
         <section className="space-y-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-700">Checklist PPE</h3>
-              <span
-                className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                  isAllowed ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
-                }`}
-              >
-                {isAllowed ? "Cho phép vào" : "Từ chối"}
-              </span>
+              <h3 className="text-sm font-semibold text-slate-700">PPE Checklist</h3>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isAllowed ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>{isAllowed ? "Allowed" : "Denied"}</span>
             </div>
             <ul className="space-y-2 text-sm">
-              <li>{checklist.hardhat ? "[x]" : "[ ]"} Mũ bảo hộ</li>
-              <li>{checklist.safety_vest ? "[x]" : "[ ]"} Áo phản quang</li>
-              <li>{checklist.gloves ? "[x]" : "[ ]"} Găng tay</li>
+              <li>{checklist.hardhat ? "[x]" : "[ ]"} Hardhat</li>
+              <li>{checklist.safety_vest ? "[x]" : "[ ]"} Safety Vest</li>
+              <li>{checklist.gloves ? "[x]" : "[ ]"} Gloves</li>
             </ul>
-            <p className="mt-3 text-xs text-slate-500">
-              Person trong ROI: {(inRoiForMs / 1000).toFixed(1)}s / 2.0s
-            </p>
+            <p className="mt-3 text-xs text-slate-500">Person in ROI: {(inRoiForMs / 1000).toFixed(1)}s / 2.0s</p>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h3 className="mb-3 text-sm font-semibold text-slate-700">5 log gần nhất</h3>
+            <h3 className="mb-3 text-sm font-semibold text-slate-700">Latest 5 Logs</h3>
             <div className="space-y-2 text-sm">
-              {latestLogs.length === 0 && <p className="text-slate-500">Chưa có dữ liệu.</p>}
+              {latestLogs.length === 0 && <p className="text-slate-500">No data yet.</p>}
               {latestLogs.map((log) => (
                 <div key={log.id ?? log.timestamp} className="rounded-lg border border-slate-200 p-2">
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-slate-500">{formatDateTime(log.timestamp)}</span>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        log.status === "ALLOWED" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
-                      }`}
-                    >
-                      {log.status}
-                    </span>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${log.status === "ALLOWED" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>{log.status}</span>
                   </div>
-                  <p className="mt-1 text-xs text-slate-600">
-                    Thiếu: {log.missingItems.length ? log.missingItems.map(ppeLabel).join(", ") : "Không"}
-                  </p>
+                  <p className="mt-1 text-xs text-slate-600">Missing: {log.missingItems.length ? log.missingItems.map(ppeLabel).join(", ") : "None"}</p>
                 </div>
               ))}
             </div>

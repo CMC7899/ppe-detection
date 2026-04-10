@@ -1,36 +1,128 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PPE Detection Web (Offline-First)
 
-## Getting Started
+A browser-based PPE (Personal Protective Equipment) inspection system built with Next.js.
+It uses the laptop camera to evaluate worker safety gear before access is allowed.
 
-First, run the development server:
+## Overview
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+This app is designed for local-first operation:
+- Camera input from the current device (`getUserMedia`)
+- On-device inference with MediaPipe TFLite (when enabled)
+- Fallback AI inference via Google Gemini API
+- Local data persistence with IndexedDB (Dexie)
+- No relay/controller integration
+
+## Key Features
+
+### 1. Dashboard (`/dashboard`)
+
+- Real-time camera stream
+- ROI (Region of Interest) drawing directly on the video
+- PPE checklist status panel
+- Access decision badge:
+  - `Allowed`
+  - `Denied`
+- Last 5 inspection logs
+- AI engine indicator:
+  - Local TFLite
+  - Google AI API fallback
+
+#### PPE decision logic
+
+Default pass condition:
+- `Person` detected
+- `Hardhat` detected
+- `Safety Vest` detected
+
+Optional:
+- `Gloves` can be required in Settings
+
+Special rule currently supported:
+- `bossHat` (stylish/non-safety hat manager exception) can satisfy the hardhat requirement in Google AI mode.
+
+### 2. History (`/history`)
+
+- View logs from IndexedDB
+- Filter by:
+  - date range (`from`, `to`)
+  - status (`ALL`, `ALLOWED`, `DENIED`)
+- Export logs to Excel (`.xlsx`)
+- Open captured snapshots
+
+### 3. Settings (`/settings`)
+
+- Configure confidence threshold
+- Configure required PPE items
+- Configure default ROI rectangle
+- Persisted locally and restored on reload
+
+## Data Model
+
+### Logs
+Each inspection entry stores:
+- timestamp
+- snapshotBase64
+- detectedItems[]
+- missingItems[]
+- status (`ALLOWED` / `DENIED`)
+
+### Settings
+Stored locally in IndexedDB:
+- confidenceThreshold
+- requiredPPE[]
+- roiRect
+
+## Tech Stack
+
+- Next.js (App Router)
+- React + TypeScript
+- Tailwind CSS
+- Dexie.js (IndexedDB)
+- MediaPipe Tasks Vision (`@mediapipe/tasks-vision`)
+- Google Gemini API (fallback AI)
+- `xlsx` + `file-saver` for Excel export
+
+## UI / Design System
+
+Theme direction (light industrial UI):
+- Background: `#F8FAFC`
+- Card: `#FFFFFF`
+- Border: `#E2E8F0`
+- Primary: `#3B82F6`
+- Success: `#22C55E`
+- Danger: `#EF4444`
+
+UX goals:
+- At-a-glance safety status
+- Fast operator workflow
+- Clear camera and AI state feedback
+
+## Environment Variables
+
+Create `.env.local` in project root:
+
+```env
+GOOGLE_AI_API_KEY=YOUR_API_KEY
+# Optional alias:
+# GEMINI_API_KEY=YOUR_API_KEY
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Run Locally
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm install
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open:
+- `http://localhost:3000/dashboard`
 
-## Learn More
+## Notes
 
-To learn more about Next.js, take a look at the following resources:
+- This app is currently configured with local TFLite disabled in dashboard (`DISABLE_LOCAL_TFLITE = true`) and uses Google AI fallback flow.
+- If you want to re-enable local inference, update `src/app/dashboard/page.tsx` accordingly.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Repository
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Public repo:
+- https://github.com/CMC7899/ppe-detection

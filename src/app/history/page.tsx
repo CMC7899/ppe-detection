@@ -33,7 +33,6 @@ export default function HistoryPage() {
   }, [fromTs, status, toTs]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadLogs();
     const handler = () => void loadLogs();
     window.addEventListener("ppe-data-changed", handler);
@@ -42,12 +41,12 @@ export default function HistoryPage() {
 
   const onExport = useCallback(() => {
     const rows = logs.map((log) => ({
-      "Thời gian": formatDateTime(log.timestamp),
-      "Trạng thái": log.status,
-      "PPE phát hiện": log.detectedItems.length
+      Time: formatDateTime(log.timestamp),
+      Status: log.status,
+      "Detected PPE": log.detectedItems.length
         ? log.detectedItems.map(ppeLabel).join(", ")
-        : "Không",
-      "PPE thiếu": log.missingItems.length ? log.missingItems.map(ppeLabel).join(", ") : "Không",
+        : "None",
+      "Missing PPE": log.missingItems.length ? log.missingItems.map(ppeLabel).join(", ") : "None",
     }));
 
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -64,11 +63,11 @@ export default function HistoryPage() {
   return (
     <AppShell>
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-slate-800">Lịch sử kiểm tra PPE</h2>
+        <h2 className="mb-4 text-lg font-semibold text-slate-800">PPE Inspection History</h2>
 
         <div className="mb-4 grid gap-3 md:grid-cols-4">
           <label className="flex flex-col gap-1 text-sm text-slate-600">
-            Từ ngày
+            From Date
             <input
               type="date"
               className="rounded-lg border border-slate-300 px-3 py-2"
@@ -78,7 +77,7 @@ export default function HistoryPage() {
           </label>
 
           <label className="flex flex-col gap-1 text-sm text-slate-600">
-            Đến ngày
+            To Date
             <input
               type="date"
               className="rounded-lg border border-slate-300 px-3 py-2"
@@ -88,7 +87,7 @@ export default function HistoryPage() {
           </label>
 
           <label className="flex flex-col gap-1 text-sm text-slate-600">
-            Trạng thái
+            Status
             <select
               className="rounded-lg border border-slate-300 px-3 py-2"
               value={status}
@@ -105,7 +104,7 @@ export default function HistoryPage() {
               className="rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600"
               onClick={() => void loadLogs()}
             >
-              Lọc
+              Apply Filters
             </button>
             <button
               className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
@@ -121,10 +120,10 @@ export default function HistoryPage() {
           <table className="min-w-full text-sm">
             <thead className="bg-slate-50 text-left text-slate-600">
               <tr>
-                <th className="px-3 py-2">Thời gian</th>
-                <th className="px-3 py-2">Trạng thái</th>
-                <th className="px-3 py-2">PPE phát hiện</th>
-                <th className="px-3 py-2">PPE thiếu</th>
+                <th className="px-3 py-2">Time</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Detected PPE</th>
+                <th className="px-3 py-2">Missing PPE</th>
                 <th className="px-3 py-2">Snapshot</th>
               </tr>
             </thead>
@@ -132,14 +131,14 @@ export default function HistoryPage() {
               {loading && (
                 <tr>
                   <td className="px-3 py-4 text-slate-500" colSpan={5}>
-                    Đang tải...
+                    Loading...
                   </td>
                 </tr>
               )}
               {!loading && logs.length === 0 && (
                 <tr>
                   <td className="px-3 py-4 text-slate-500" colSpan={5}>
-                    Không có dữ liệu phù hợp.
+                    No matching data.
                   </td>
                 </tr>
               )}
@@ -159,10 +158,10 @@ export default function HistoryPage() {
                       </span>
                     </td>
                     <td className="px-3 py-2">
-                      {log.detectedItems.length ? log.detectedItems.map(ppeLabel).join(", ") : "Không"}
+                      {log.detectedItems.length ? log.detectedItems.map(ppeLabel).join(", ") : "None"}
                     </td>
                     <td className="px-3 py-2">
-                      {log.missingItems.length ? log.missingItems.map(ppeLabel).join(", ") : "Không"}
+                      {log.missingItems.length ? log.missingItems.map(ppeLabel).join(", ") : "None"}
                     </td>
                     <td className="px-3 py-2">
                       {log.snapshotBase64 ? (
@@ -172,7 +171,7 @@ export default function HistoryPage() {
                           rel="noreferrer"
                           className="text-blue-600 hover:underline"
                         >
-                          Xem ảnh
+                          View Image
                         </a>
                       ) : (
                         <span className="text-slate-400">N/A</span>

@@ -62,11 +62,11 @@ export async function getFilteredLogs(params: {
 export function ppeLabel(item: PPEItem): string {
   switch (item) {
     case "hardhat":
-      return "Mũ bảo hộ";
+      return "Hardhat";
     case "safety_vest":
-      return "Áo phản quang";
+      return "Safety Vest";
     case "gloves":
-      return "Găng tay";
+      return "Gloves";
     default:
       return item;
   }

@@ -5,8 +5,8 @@ import { usePathname } from "next/navigation";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/history", label: "Lịch sử" },
-  { href: "/settings", label: "Cài đặt" },
+  { href: "/history", label: "History" },
+  { href: "/settings", label: "Settings" },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {

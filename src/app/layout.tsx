@@ -9,14 +9,14 @@ const geistSans = Geist({
 
 export const metadata: Metadata = {
   title: "PPE Detection System",
-  description: "Giám sát bảo hộ lao động trên camera laptop",
+  description: "PPE monitoring using laptop camera",
 };
 
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="vi" className={`${geistSans.variable}`}>
+    <html lang="en" className={`${geistSans.variable}`}>
       <body>{children}</body>
     </html>
   );

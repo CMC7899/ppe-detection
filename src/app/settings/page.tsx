@@ -7,9 +7,9 @@ import { normalizeRoi } from "@/lib/ppe";
 import { AppSettings, PPEItem } from "@/lib/types";
 
 const PPE_OPTIONS: { key: PPEItem; label: string }[] = [
-  { key: "hardhat", label: "Mũ bảo hộ (hardhat)" },
-  { key: "safety_vest", label: "Áo phản quang (safety_vest)" },
-  { key: "gloves", label: "Găng tay (gloves)" },
+  { key: "hardhat", label: "Hardhat (hardhat)" },
+  { key: "safety_vest", label: "Safety Vest (safety_vest)" },
+  { key: "gloves", label: "Gloves (gloves)" },
 ];
 
 export default function SettingsPage() {
@@ -51,7 +51,7 @@ export default function SettingsPage() {
     return (
       <AppShell>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
-          Đang tải cài đặt...
+          Loading settings...
         </div>
       </AppShell>
     );
@@ -60,7 +60,7 @@ export default function SettingsPage() {
   return (
     <AppShell>
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-slate-800">Cài đặt hệ thống</h2>
+        <h2 className="mb-4 text-lg font-semibold text-slate-800">System Settings</h2>
 
         <div className="grid gap-4 md:grid-cols-2">
           <label className="flex flex-col gap-1 text-sm text-slate-600">
@@ -83,7 +83,7 @@ export default function SettingsPage() {
           </label>
 
           <div className="rounded-lg border border-slate-200 p-3">
-            <p className="mb-2 text-sm font-medium text-slate-700">PPE bắt buộc</p>
+            <p className="mb-2 text-sm font-medium text-slate-700">Required PPE</p>
             <div className="space-y-2 text-sm">
               {PPE_OPTIONS.map((option) => (
                 <label key={option.key} className="flex items-center gap-2 text-slate-700">
@@ -99,7 +99,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="rounded-lg border border-slate-200 p-3 md:col-span-2">
-            <p className="mb-2 text-sm font-medium text-slate-700">ROI mặc định (tọa độ tương đối 0 - 1)</p>
+            <p className="mb-2 text-sm font-medium text-slate-700">Default ROI (normalized coordinates 0 - 1)</p>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {(["x", "y", "width", "height"] as const).map((key) => (
                 <label key={key} className="flex flex-col gap-1 text-xs text-slate-600">
@@ -137,9 +137,9 @@ export default function SettingsPage() {
             disabled={saving}
             className="rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-60"
           >
-            {saving ? "Đang lưu..." : "Lưu cài đặt"}
+            {saving ? "Saving..." : "Save Settings"}
           </button>
-          <p className="text-xs text-slate-500">Cài đặt được lưu local và áp dụng lại sau khi reload.</p>
+          <p className="text-xs text-slate-500">Settings are saved locally and restored on reload.</p>
         </div>
       </section>
     </AppShell>
