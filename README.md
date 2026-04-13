@@ -1,90 +1,128 @@
 # PPE Detection Web (Offline-First)
 
 A browser-based PPE (Personal Protective Equipment) inspection system built with Next.js.
-It uses the laptop camera to evaluate worker safety gear before access is allowed.
+It uses the current device camera to evaluate worker safety gear before access is allowed.
 
-## Overview
+---
 
-This app is designed for local-first operation:
+## 1) Product Summary
+
+PPE Detection Web is designed for **local-first / edge-first** operation:
+
 - Camera input from the current device (`getUserMedia`)
-- On-device inference with MediaPipe TFLite (when enabled)
-- Fallback AI inference via Google Gemini API
-- Local data persistence with IndexedDB (Dexie)
-- No relay/controller integration
+- ROI-based inspection trigger
+- Real-time checklist and gate decision
+- Local persistence in IndexedDB (Dexie)
+- Browser-side report export (Excel)
+- Optional local TFLite inference + Google AI fallback
 
-## Key Features
+This implementation currently prioritizes **Google AI API flow** in Dashboard (`DISABLE_LOCAL_TFLITE = true`), while the code path for local TFLite remains available.
 
-### 1. Dashboard (`/dashboard`)
+---
 
-- Real-time camera stream
-- ROI (Region of Interest) drawing directly on the video
-- PPE checklist status panel
-- Access decision badge:
-  - `Allowed`
-  - `Denied`
-- Last 5 inspection logs
-- AI engine indicator:
-  - Local TFLite
-  - Google AI API fallback
+## 2) Functional Scope
 
-#### PPE decision logic
+### Dashboard (`/dashboard`)
 
-Default pass condition:
-- `Person` detected
-- `Hardhat` detected
-- `Safety Vest` detected
+Left panel:
+- Live camera preview
+- ROI rectangle drawing/editing on overlay canvas
+- Camera selector for multi-camera devices
+- Camera status message (`connecting`, `ready`, `denied`, `not_found`, `error`)
 
-Optional:
-- `Gloves` can be required in Settings
+Right panel:
+- Real-time PPE checklist
+- Gate decision badge (`Allowed` / `Denied`)
+- Person-in-ROI timer (must hold for 2 seconds)
+- Latest 5 inspection logs
 
-Special rule currently supported:
-- `bossHat` (stylish/non-safety hat manager exception) can satisfy the hardhat requirement in Google AI mode.
+Core behavior:
+- Inspection only counts when a person remains in ROI for at least `2s`
+- Debounced logging (`3s` cooldown) prevents frame-by-frame spam logs
+- Snapshot is captured and saved with each finalized inspection event
 
-### 2. History (`/history`)
+### History (`/history`)
 
-- View logs from IndexedDB
-- Filter by:
-  - date range (`from`, `to`)
-  - status (`ALL`, `ALLOWED`, `DENIED`)
-- Export logs to Excel (`.xlsx`)
-- Open captured snapshots
+- View inspection logs from IndexedDB
+- Filters:
+  - Date range (`From`, `To`)
+  - Status (`ALL`, `ALLOWED`, `DENIED`)
+- Export filtered rows to Excel (`.xlsx`)
+- Open stored snapshots
 
-### 3. Settings (`/settings`)
+### Settings (`/settings`)
 
-- Configure confidence threshold
-- Configure required PPE items
-- Configure default ROI rectangle
-- Persisted locally and restored on reload
+- Adjust confidence threshold (`0.0`–`1.0`)
+- Toggle required PPE items
+- Edit default ROI (`x`, `y`, `width`, `height`, normalized)
+- Save locally and auto-restore on reload
 
-## Data Model
+---
 
-### Logs
-Each inspection entry stores:
-- timestamp
-- snapshotBase64
-- detectedItems[]
-- missingItems[]
-- status (`ALLOWED` / `DENIED`)
+## 3) PPE Decision Rules
 
-### Settings
-Stored locally in IndexedDB:
-- confidenceThreshold
-- requiredPPE[]
-- roiRect
+Default pass requirements:
+1. `person = true`
+2. `hardhat = true`
+3. `safety_vest = true`
 
-## Tech Stack
+Optional requirement:
+- `gloves` can be enabled as required in Settings
 
-- Next.js (App Router)
-- React + TypeScript
-- Tailwind CSS
-- Dexie.js (IndexedDB)
+Additional business exception implemented:
+- `bossHat = true` (stylish/non-safety manager hat) can satisfy hardhat requirement in Google AI response mapping.
+
+Final status:
+- `Allowed` if required checklist is satisfied after ROI hold condition
+- `Denied` otherwise
+
+---
+
+## 4) Data & Storage Design
+
+### IndexedDB Database (`ppe_detection_db`)
+
+#### `logs` table
+Stores each finalized inspection event:
+- `timestamp`
+- `snapshotBase64`
+- `detectedItems[]`
+- `missingItems[]`
+- `status` (`ALLOWED` / `DENIED`)
+
+#### `settings` table
+Stores runtime configuration:
+- `confidenceThreshold`
+- `requiredPPE[]`
+- `roiRect`
+
+Everything is read/written locally for offline-first behavior.
+
+---
+
+## 5) AI / Inference Design
+
+### Local inference path
 - MediaPipe Tasks Vision (`@mediapipe/tasks-vision`)
-- Google Gemini API (fallback AI)
-- `xlsx` + `file-saver` for Excel export
+- Object detector + overlay + label mapping
+- Currently disabled by flag in Dashboard for stability in current release
 
-## UI / Design System
+### Google AI fallback path
+- API route: `src/app/api/ppe-detect/route.ts`
+- Image snapshot + ROI sent to model prompt
+- Stream parsing with safe JSON extraction
+- Parse failures are returned explicitly as `ok: false` with debug context
 
-Theme direction (light industrial UI):
+Model currently configured in route:
+- `gemini-3.1-pro-preview`
+
+---
+
+## 6) UI / Visual Design
+
+Design language: **clean industrial dashboard**
+
+Palette:
 - Background: `#F8FAFC`
 - Card: `#FFFFFF`
 - Border: `#E2E8F0`
@@ -93,11 +131,25 @@ Theme direction (light industrial UI):
 - Danger: `#EF4444`
 
 UX goals:
-- At-a-glance safety status
-- Fast operator workflow
-- Clear camera and AI state feedback
+- One-glance safety decision
+- Clear camera/AI state visibility
+- Fast operator flow on laptop devices
 
-## Environment Variables
+---
+
+## 7) Tech Stack
+
+- Next.js (App Router)
+- React + TypeScript
+- Tailwind CSS
+- Dexie.js (IndexedDB)
+- MediaPipe Tasks Vision (`@mediapipe/tasks-vision`)
+- Google AI (Gemini) API
+- `xlsx` + `file-saver` for report export
+
+---
+
+## 8) Environment Variables
 
 Create `.env.local` in project root:
 
@@ -107,7 +159,9 @@ GOOGLE_AI_API_KEY=YOUR_API_KEY
 # GEMINI_API_KEY=YOUR_API_KEY
 ```
 
-## Run Locally
+---
+
+## 9) Run Locally
 
 ```bash
 npm install
@@ -117,12 +171,14 @@ npm run dev
 Open:
 - `http://localhost:3000/dashboard`
 
-## Notes
+---
 
-- This app is currently configured with local TFLite disabled in dashboard (`DISABLE_LOCAL_TFLITE = true`) and uses Google AI fallback flow.
-- If you want to re-enable local inference, update `src/app/dashboard/page.tsx` accordingly.
+## 10) Current Status
 
-## Repository
+- UI language: **English** across navigation and pages
+- Dashboard / History / Settings implemented
+- Local storage + export flow implemented
+- Google AI route hardened for common parse/runtime failures
 
-Public repo:
+Public repository:
 - https://github.com/CMC7899/ppe-detection
