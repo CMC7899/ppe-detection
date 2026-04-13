@@ -1,4 +1,16 @@
-﻿"use client";
+$ErrorActionPreference = "Stop"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+$baseDir = "C:\Users\green\Downloads\OCR-Labor Protection\ppe-detection"
+$dashDir = Join-Path $baseDir "src\app\dashboard"
+$pageFile = Join-Path $dashDir "page.tsx"
+
+if (-not (Test-Path $dashDir)) {
+    New-Item -ItemType Directory -Path $dashDir -Force | Out-Null
+}
+
+$content = @'
+"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
@@ -306,3 +318,8 @@ export default function DashboardPage() {
     </AppShell>
   );
 }
+'@
+
+Set-Content -Path $pageFile -Value $content -Encoding UTF8
+Write-Host "Written: $pageFile"
+Write-Host "Size: $((Get-Item $pageFile).Length) bytes"

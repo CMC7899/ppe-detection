@@ -28,7 +28,6 @@ function extractJsonCandidate(text: string): string {
     let depth = 0;
     let inString = false;
     let escaped = false;
-
     for (let i = start; i < raw.length; i += 1) {
       const ch = raw[i];
       if (inString) {
@@ -37,10 +36,7 @@ function extractJsonCandidate(text: string): string {
         else if (ch === '"') inString = false;
         continue;
       }
-      if (ch === '"') {
-        inString = true;
-        continue;
-      }
+      if (ch === '"') { inString = true; continue; }
       if (ch === "{") depth += 1;
       if (ch === "}") {
         depth -= 1;
@@ -48,25 +44,13 @@ function extractJsonCandidate(text: string): string {
       }
     }
   }
-
   return raw;
 }
 
 function toChecklistSafe(rawText: string): { checklist: GeminiChecklist; parseError?: string } {
-  const fallback: GeminiChecklist = {
-    person: false,
-    personInRoi: false,
-    hardhat: false,
-    safety_vest: false,
-    gloves: false,
-    bossHat: false,
-  };
-
+  const fallback: GeminiChecklist = { person: false, personInRoi: false, hardhat: false, safety_vest: false, gloves: false, bossHat: false };
   const candidate = extractJsonCandidate(rawText);
-  if (!candidate) {
-    return { checklist: fallback, parseError: "Empty model output" };
-  }
-
+  if (!candidate) return { checklist: fallback, parseError: "Empty model output" };
   try {
     const parsed = JSON.parse(candidate) as Partial<GeminiChecklist>;
     return {
@@ -80,18 +64,14 @@ function toChecklistSafe(rawText: string): { checklist: GeminiChecklist; parseEr
       },
     };
   } catch (error) {
-    return {
-      checklist: fallback,
-      parseError: error instanceof Error ? error.message : "Invalid JSON from model",
-    };
+    return { checklist: fallback, parseError: error instanceof Error ? error.message : "Invalid JSON" };
   }
 }
 
 function extractTextFromChunk(obj: unknown): string {
   if (!obj || typeof obj !== "object") return "";
   const root = obj as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-  const text = root.candidates?.[0]?.content?.parts?.[0]?.text;
-  return typeof text === "string" ? text : "";
+  return typeof root.candidates?.[0]?.content?.parts?.[0]?.text === "string" ? root.candidates[0].content.parts[0].text : "";
 }
 
 async function readGeminiStream(response: Response): Promise<{ text: string; chunkCount: number }> {
@@ -99,149 +79,100 @@ async function readGeminiStream(response: Response): Promise<{ text: string; chu
   const lines = body.split(/\r?\n/);
   let merged = "";
   let chunkCount = 0;
-
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed.startsWith("data:")) continue;
     const payload = trimmed.slice(5).trim();
     if (!payload || payload === "[DONE]") continue;
-
     try {
-      const chunk = JSON.parse(payload) as unknown;
-      const delta = extractTextFromChunk(chunk);
-      if (delta) {
-        merged += delta;
-        chunkCount += 1;
-      }
-    } catch {
-      // ignore malformed chunk
-    }
+      const delta = extractTextFromChunk(JSON.parse(payload));
+      if (delta) { merged += delta; chunkCount += 1; }
+    } catch { /* ignore */ }
   }
-
   return { text: merged.trim(), chunkCount };
 }
 
+const MODELS = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash-lite", "gemini-3.1-pro-preview"];
+
 export async function POST(req: Request) {
+  console.log("[PPE API] Request received");
+
   try {
     const apiKey = process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Missing GOOGLE_AI_API_KEY (or GEMINI_API_KEY). Configure env for local/Cloudflare Pages.",
-        },
-        { status: 500 },
-      );
+      console.error("[PPE API] Missing GOOGLE_AI_API_KEY");
+      return NextResponse.json({ ok: false, error: "Missing GOOGLE_AI_API_KEY. Configure env." }, { status: 500 });
     }
 
-    const body = (await req.json()) as {
-      imageBase64?: string;
-      roiRect?: { x: number; y: number; width: number; height: number };
-    };
-
+    const body = (await req.json()) as { imageBase64?: string; roiRect?: { x: number; y: number; width: number; height: number } };
     const imageBase64 = body.imageBase64?.replace(/^data:image\/\w+;base64,/, "");
     const roi = body.roiRect ?? { x: 0.2, y: 0.15, width: 0.6, height: 0.75 };
 
     if (!imageBase64) {
+      console.warn("[PPE API] Missing imageBase64");
       return NextResponse.json({ ok: false, error: "Missing imageBase64" }, { status: 400 });
     }
 
-    const prompt = `You are a PPE inspector. Analyze this image and answer ONLY strict JSON object with shape:
+    const prompt = `You are a PPE inspector. Analyze this image and answer ONLY strict JSON:
 {"person":boolean,"personInRoi":boolean,"hardhat":boolean,"safety_vest":boolean,"gloves":boolean,"bossHat":boolean}
-ROI rectangle (normalized): x=${roi.x}, y=${roi.y}, width=${roi.width}, height=${roi.height}
-Rules:
-- person=true if at least one worker/person is visible.
-- personInRoi=true if center point of any visible person is inside ROI rectangle.
-- hardhat=true if any visible person clearly wears a hardhat/helmet.
-- safety_vest=true if any visible person clearly wears a safety vest/reflective vest.
-- gloves=true if any visible person clearly wears gloves.
-- bossHat=true if the person appears to wear a stylish/fashion hat (e.g. fedora, cap as non-safety hat) indicating manager/boss exception.
-- Return MINIFIED JSON only. No markdown, no explanation, no prefix/suffix text.`;
+ROI: x=${roi.x}, y=${roi.y}, w=${roi.width}, h=${roi.height}
+Return MINIFIED JSON only. No markdown, no explanation.`;
 
     const payload = {
-      contents: [
-        {
-          parts: [
-            { text: prompt },
-            {
-              inlineData: {
-                mimeType: "image/jpeg",
-                data: imageBase64,
-              },
-            },
-          ],
-        },
-      ],
-      generationConfig: {
-        temperature: 0,
-        topP: 0.1,
-        topK: 1,
-        maxOutputTokens: 1024,
-        responseMimeType: "application/json",
-      },
+      contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: imageBase64 } }] }],
+      generationConfig: { temperature: 0, topP: 0.1, topK: 1, maxOutputTokens: 1024, responseMimeType: "application/json" },
     };
 
-    const modelCandidates = ["gemini-3.1-pro-preview"];
     let response: Response | null = null;
-    let lastErrorText = "";
     let usedModel = "";
 
-    for (const modelName of modelCandidates) {
+    for (let i = 0; i < MODELS.length; i++) {
+      const modelName = MODELS[i];
+      console.log(`[PPE API] Trying model [${i + 1}/${MODELS.length}]: ${modelName}`);
+
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        },
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }
       );
 
       if (res.ok) {
+        console.log(`[PPE API] SUCCESS using model: ${modelName}`);
         response = res;
         usedModel = modelName;
         break;
+      } else {
+        const errText = await res.text();
+        console.warn(`[PPE API] Model ${modelName} failed (${res.status}): ${errText.slice(0, 200)}`);
       }
-
-      lastErrorText = await res.text();
     }
 
     if (!response) {
-      return NextResponse.json(
-        { ok: false, error: `Gemini API error (all models failed): ${lastErrorText}` },
-        { status: 502 },
-      );
+      console.error("[PPE API] All models failed");
+      return NextResponse.json({ ok: false, error: "All Gemini models failed" }, { status: 502 });
     }
 
     const { text: rawText, chunkCount } = await readGeminiStream(response);
+    console.log(`[PPE API] Stream received: ${chunkCount} chunks, text length: ${rawText.length}`);
+
     if (!rawText) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Empty model output from stream",
-          model: usedModel,
-          chunkCount,
-        },
-        { status: 502 },
-      );
+      console.warn("[PPE API] Empty model output");
+      return NextResponse.json({ ok: false, error: "Empty model output", model: usedModel, chunkCount }, { status: 502 });
     }
+
+    console.log(`[PPE API] Raw output: ${rawText.slice(0, 300)}`);
 
     const { checklist, parseError } = toChecklistSafe(rawText);
     if (parseError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: `Unable to parse model output: ${parseError}`,
-          rawText: rawText.slice(0, 500),
-          model: usedModel,
-          chunkCount,
-        },
-        { status: 502 },
-      );
+      console.error(`[PPE API] Parse error: ${parseError}`);
+      return NextResponse.json({ ok: false, error: `Parse error: ${parseError}`, rawText: rawText.slice(0, 500), model: usedModel }, { status: 502 });
     }
 
-    return NextResponse.json({ ok: true, checklist, rawText, model: usedModel, chunkCount });
+    console.log(`[PPE API] SUCCESS - checklist:`, checklist);
+    return NextResponse.json({ ok: true, checklist, model: usedModel, chunkCount });
+
   } catch (error) {
-    const msg = error instanceof Error ? error.message : "Unknown server error";
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    console.error(`[PPE API] Exception: ${msg}`);
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
 }
